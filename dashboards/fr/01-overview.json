@@ -1382,7 +1382,7 @@
             "type": "influxdb",
             "uid": "${ds}"
           },
-          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"nics\" and r.object == \"nodes\" and r._field == \"receive\")\n  |> filter(fn: (r) => r.host =~ /^${node:regex}$/)\n  |> filter(fn: (r) => r.instance =~ /^(eth|en|nic|wl|ib)/)\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> derivative(unit: 1s, nonNegative: true)\n  |> group(columns: [\"host\", \"_time\"])\n  |> sum()\n  |> group(columns: [\"host\"])\n  |> sort(columns: [\"_time\"])\n  |> map(fn: (r) => ({_time: r._time, _value: r._value * 8.0, node: r.host}))\n  |> group(columns: [\"node\"])"
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"nics\" and r.object == \"nodes\" and r._field == \"receive\")\n  |> filter(fn: (r) => r.host =~ /^${node:regex}$/)\n  |> filter(fn: (r) => r.instance =~ /^(eth|en|nic|wl|ib)/)\n  |> aggregateWindow(every: v.windowPeriod, fn: last, timeSrc: \"_time\", createEmpty: false)\n  |> derivative(unit: 1s, nonNegative: true)\n  |> group(columns: [\"host\", \"_time\"])\n  |> sum()\n  |> group(columns: [\"host\"])\n  |> sort(columns: [\"_time\"])\n  |> map(fn: (r) => ({_time: r._time, _value: r._value * 8.0, node: r.host}))\n  |> group(columns: [\"node\"])"
         },
         {
           "refId": "B",
@@ -1390,7 +1390,7 @@
             "type": "influxdb",
             "uid": "${ds}"
           },
-          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"nics\" and r.object == \"nodes\" and r._field == \"transmit\")\n  |> filter(fn: (r) => r.host =~ /^${node:regex}$/)\n  |> filter(fn: (r) => r.instance =~ /^(eth|en|nic|wl|ib)/)\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> derivative(unit: 1s, nonNegative: true)\n  |> group(columns: [\"host\", \"_time\"])\n  |> sum()\n  |> group(columns: [\"host\"])\n  |> sort(columns: [\"_time\"])\n  |> map(fn: (r) => ({_time: r._time, _value: r._value * 8.0, node: r.host}))\n  |> group(columns: [\"node\"])"
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"nics\" and r.object == \"nodes\" and r._field == \"transmit\")\n  |> filter(fn: (r) => r.host =~ /^${node:regex}$/)\n  |> filter(fn: (r) => r.instance =~ /^(eth|en|nic|wl|ib)/)\n  |> aggregateWindow(every: v.windowPeriod, fn: last, timeSrc: \"_time\", createEmpty: false)\n  |> derivative(unit: 1s, nonNegative: true)\n  |> group(columns: [\"host\", \"_time\"])\n  |> sum()\n  |> group(columns: [\"host\"])\n  |> sort(columns: [\"_time\"])\n  |> map(fn: (r) => ({_time: r._time, _value: r._value * 8.0, node: r.host}))\n  |> group(columns: [\"node\"])"
         }
       ],
       "fieldConfig": {

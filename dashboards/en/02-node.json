@@ -1279,7 +1279,7 @@
             "type": "influxdb",
             "uid": "${ds}"
           },
-          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"nics\" and r.object == \"nodes\" and r._field == \"receive\")\n  |> filter(fn: (r) => r.host == \"${node}\")\n  |> filter(fn: (r) => r.instance !~ /^(fwbr|fwpr|fwln|tap|veth|lo$)/)\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({_time: r._time, _value: r._value * 8.0, iface: r.instance}))\n  |> group(columns: [\"iface\"])"
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"nics\" and r.object == \"nodes\" and r._field == \"receive\")\n  |> filter(fn: (r) => r.host == \"${node}\")\n  |> filter(fn: (r) => r.instance !~ /^(fwbr|fwpr|fwln|tap|veth|lo$)/)\n  |> aggregateWindow(every: v.windowPeriod, fn: last, timeSrc: \"_time\", createEmpty: false)\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({_time: r._time, _value: r._value * 8.0, iface: r.instance}))\n  |> group(columns: [\"iface\"])"
         },
         {
           "refId": "B",
@@ -1287,7 +1287,7 @@
             "type": "influxdb",
             "uid": "${ds}"
           },
-          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"nics\" and r.object == \"nodes\" and r._field == \"transmit\")\n  |> filter(fn: (r) => r.host == \"${node}\")\n  |> filter(fn: (r) => r.instance !~ /^(fwbr|fwpr|fwln|tap|veth|lo$)/)\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({_time: r._time, _value: r._value * 8.0, iface: r.instance}))\n  |> group(columns: [\"iface\"])"
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"nics\" and r.object == \"nodes\" and r._field == \"transmit\")\n  |> filter(fn: (r) => r.host == \"${node}\")\n  |> filter(fn: (r) => r.instance !~ /^(fwbr|fwpr|fwln|tap|veth|lo$)/)\n  |> aggregateWindow(every: v.windowPeriod, fn: last, timeSrc: \"_time\", createEmpty: false)\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({_time: r._time, _value: r._value * 8.0, iface: r.instance}))\n  |> group(columns: [\"iface\"])"
         }
       ],
       "fieldConfig": {
@@ -1825,7 +1825,7 @@
             "type": "influxdb",
             "uid": "${ds}"
           },
-          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"pg_disk\" and r._field == \"read_bytes\")\n  |> filter(fn: (r) => r.host == \"${node}\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({_time: r._time, _value: r._value, disk: r.disk}))\n  |> group(columns: [\"disk\"])"
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"pg_disk\" and r._field == \"read_bytes\")\n  |> filter(fn: (r) => r.host == \"${node}\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, timeSrc: \"_time\", createEmpty: false)\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({_time: r._time, _value: r._value, disk: r.disk}))\n  |> group(columns: [\"disk\"])"
         },
         {
           "refId": "B",
@@ -1833,7 +1833,7 @@
             "type": "influxdb",
             "uid": "${ds}"
           },
-          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"pg_disk\" and r._field == \"write_bytes\")\n  |> filter(fn: (r) => r.host == \"${node}\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({_time: r._time, _value: r._value, disk: r.disk}))\n  |> group(columns: [\"disk\"])"
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"pg_disk\" and r._field == \"write_bytes\")\n  |> filter(fn: (r) => r.host == \"${node}\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, timeSrc: \"_time\", createEmpty: false)\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({_time: r._time, _value: r._value, disk: r.disk}))\n  |> group(columns: [\"disk\"])"
         }
       ],
       "fieldConfig": {
@@ -1938,7 +1938,7 @@
             "type": "influxdb",
             "uid": "${ds}"
           },
-          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"pg_disk\" and r._field == \"io_time_ms\")\n  |> filter(fn: (r) => r.host == \"${node}\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({_time: r._time, _value: if r._value > 1000.0 then 1.0 else r._value / 1000.0, disk: r.disk}))\n  |> group(columns: [\"disk\"])"
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"pg_disk\" and r._field == \"io_time_ms\")\n  |> filter(fn: (r) => r.host == \"${node}\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, timeSrc: \"_time\", createEmpty: false)\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({_time: r._time, _value: if r._value > 1000.0 then 1.0 else r._value / 1000.0, disk: r.disk}))\n  |> group(columns: [\"disk\"])"
         }
       ],
       "fieldConfig": {
@@ -2017,7 +2017,7 @@
             "type": "influxdb",
             "uid": "${ds}"
           },
-          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"pg_disk\" and r._field == \"reads\")\n  |> filter(fn: (r) => r.host == \"${node}\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({_time: r._time, _value: r._value, disk: r.disk}))\n  |> group(columns: [\"disk\"])"
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"pg_disk\" and r._field == \"reads\")\n  |> filter(fn: (r) => r.host == \"${node}\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, timeSrc: \"_time\", createEmpty: false)\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({_time: r._time, _value: r._value, disk: r.disk}))\n  |> group(columns: [\"disk\"])"
         },
         {
           "refId": "B",
@@ -2025,7 +2025,7 @@
             "type": "influxdb",
             "uid": "${ds}"
           },
-          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"pg_disk\" and r._field == \"writes\")\n  |> filter(fn: (r) => r.host == \"${node}\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({_time: r._time, _value: r._value, disk: r.disk}))\n  |> group(columns: [\"disk\"])"
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"pg_disk\" and r._field == \"writes\")\n  |> filter(fn: (r) => r.host == \"${node}\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, timeSrc: \"_time\", createEmpty: false)\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({_time: r._time, _value: r._value, disk: r.disk}))\n  |> group(columns: [\"disk\"])"
         }
       ],
       "fieldConfig": {
@@ -2131,7 +2131,7 @@
             "type": "influxdb",
             "uid": "${ds}"
           },
-          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"pg_disk\" and (r._field == \"reads\" or r._field == \"writes\" or r._field == \"read_time_ms\" or r._field == \"write_time_ms\"))\n  |> filter(fn: (r) => r.host == \"${node}\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> derivative(unit: 1s, nonNegative: true)\n  |> group(columns: [\"disk\"])\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({_time: r._time, disk: r.disk,\n      _value: if r.reads + r.writes > 0.0 then (r.read_time_ms + r.write_time_ms) / (r.reads + r.writes) else 0.0}))\n  |> group(columns: [\"disk\"])"
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"pg_disk\" and (r._field == \"reads\" or r._field == \"writes\" or r._field == \"read_time_ms\" or r._field == \"write_time_ms\"))\n  |> filter(fn: (r) => r.host == \"${node}\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, timeSrc: \"_time\", createEmpty: false)\n  |> derivative(unit: 1s, nonNegative: true)\n  |> group(columns: [\"disk\"])\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({_time: r._time, disk: r.disk,\n      _value: if r.reads + r.writes > 0.0 then (r.read_time_ms + r.write_time_ms) / (r.reads + r.writes) else 0.0}))\n  |> group(columns: [\"disk\"])"
         }
       ],
       "fieldConfig": {
