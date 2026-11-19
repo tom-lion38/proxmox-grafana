@@ -1,0 +1,22 @@
+[Unit]
+Description=proxmox-grafana agent (disks, temperatures, SMART, ZFS)
+Documentation=https://github.com/tom-lion38/proxmox-grafana
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/proxmox-grafana-agent
+Restart=always
+RestartSec=30
+RuntimeDirectory=proxmox-grafana-agent
+RuntimeDirectoryMode=0700
+Nice=10
+IOSchedulingClass=idle
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

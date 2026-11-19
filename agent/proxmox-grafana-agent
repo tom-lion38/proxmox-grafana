@@ -1,0 +1,274 @@
+#!/usr/bin/env bash
+#
+# proxmox-grafana-agent
+# Envoie a InfluxDB ce que Proxmox VE ne mesure pas lui-meme :
+# activite de chaque disque physique, temperatures, ventilateurs,
+# sante SMART des disques et etat des pools ZFS.
+#
+# Configuration : /etc/proxmox-grafana/agent.conf
+# Voir ce qui serait envoye, sans rien envoyer : proxmox-grafana-agent --print
+# https://github.com/tom-lion38/proxmox-grafana (licence MIT)
+
+set -uo pipefail
+
+VERSION="1.0.0"
+CONF="${PG_AGENT_CONF:-/etc/proxmox-grafana/agent.conf}"
+PRINT_ONLY=0
+ONCE=0
+
+case "${1:-}" in
+  --print) PRINT_ONLY=1; ONCE=1 ;;
+  --once) ONCE=1 ;;
+  --version) echo "$VERSION"; exit 0 ;;
+  -h | --help)
+    echo "Usage: proxmox-grafana-agent [--print | --once | --version]"
+    exit 0
+    ;;
+esac
+
+if [[ -r "$CONF" ]]; then
+  # shellcheck disable=SC1090
+  . "$CONF"
+elif ((!PRINT_ONLY)); then
+  echo "Configuration not found: $CONF" >&2
+  exit 1
+fi
+
+PG_URL="${PG_URL:-}"
+PG_TOKEN="${PG_TOKEN:-}"
+PG_ORG="${PG_ORG:-proxmox}"
+PG_BUCKET="${PG_BUCKET:-proxmox}"
+PG_INTERVAL="${PG_INTERVAL:-15}"
+PG_SMART_INTERVAL="${PG_SMART_INTERVAL:-600}"
+
+if ((!PRINT_ONLY)) && [[ -z "$PG_URL" || -z "$PG_TOKEN" ]]; then
+  echo "PG_URL and PG_TOKEN are required in $CONF" >&2
+  exit 1
+fi
+
+NODE=$(perl -MPVE::INotify -e 'print PVE::INotify::nodename()' 2>/dev/null || hostname -s)
+
+# Echappement des valeurs de tag (protocole InfluxDB)
+esc() {
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s// /\\ }"
+  s="${s//,/\\,}"
+  s="${s//=/\\=}"
+  printf '%s' "${s:-unknown}"
+}
+
+# 45123 -> 45.123
+milli() {
+  local v="$1" sign=""
+  if ((v < 0)); then sign="-"; v=$((-v)); fi
+  printf '%s%d.%03d' "$sign" $((v / 1000)) $((v % 1000))
+}
+
+# Disques physiques entiers (pas les partitions ni les volumes virtuels)
+list_disks() {
+  local d name
+  for d in /sys/block/*; do
+    name="${d##*/}"
+    case "$name" in
+      loop* | ram* | zram* | dm-* | md* | zd* | rbd* | nbd* | sr* | fd* | drbd*) continue ;;
+    esac
+    [[ "$name" =~ ^nvme[0-9]+c[0-9]+n[0-9]+$ ]] && continue
+    [[ -e "$d/device" ]] || continue
+    printf '%s\n' "$name"
+  done
+}
+
+disk_model() {
+  local m=""
+  [[ -r "/sys/block/$1/device/model" ]] && read -r m <"/sys/block/$1/device/model"
+  printf '%s' "$m"
+}
+
+disk_kind() {
+  local rot=1
+  [[ "$1" == nvme* ]] && { printf 'nvme'; return; }
+  [[ -r "/sys/block/$1/queue/rotational" ]] && read -r rot <"/sys/block/$1/queue/rotational"
+  if [[ "$rot" == "0" ]]; then printf 'ssd'; else printf 'hdd'; fi
+}
+
+collect_disks() {
+  local disks name model kind size rd rds rdt wr wrs wrt inprog iot wiot tags
+  disks=" $(list_disks | tr '\n' ' ') "
+  while read -r _ _ name rd _ rds rdt wr _ wrs wrt inprog iot wiot _; do
+    [[ -n "$name" && "$rd" =~ ^[0-9]+$ && "$iot" =~ ^[0-9]+$ ]] || continue
+    [[ "$disks" == *" $name "* ]] || continue
+    model=$(disk_model "$name")
+    kind=$(disk_kind "$name")
+    size=0
+    [[ -r "/sys/block/$name/size" ]] && read -r size <"/sys/block/$name/size"
+    tags="host=$(esc "$NODE"),disk=$(esc "$name"),type=$kind"
+    [[ -n "$model" ]] && tags="$tags,model=$(esc "$model")"
+    printf 'pg_disk,%s reads=%si,writes=%si,read_bytes=%si,write_bytes=%si,read_time_ms=%si,write_time_ms=%si,io_time_ms=%si,weighted_io_time_ms=%si,in_progress=%si,size_bytes=%si %s\n' \
+      "$tags" "$rd" "$wr" $((rds * 512)) $((wrs * 512)) "$rdt" "$wrt" "$iot" "$wiot" "$inprog" $((size * 512)) "$TS"
+  done </proc/diskstats
+}
+
+# Temperatures et ventilateurs (/sys/class/hwmon, aucun paquet requis)
+collect_hwmon() {
+  local h chip dev f base label val seen
+  for h in /sys/class/hwmon/hwmon*; do
+    [[ -r "$h/name" ]] || continue
+    read -r chip <"$h/name" || continue
+    dev="${h##*/}"
+    [[ -e "$h/device" ]] && dev=$(basename "$(readlink -f "$h/device")")
+    seen="|"
+    for f in "$h"/temp*_input; do
+      [[ -r "$f" ]] || continue
+      read -r val <"$f" 2>/dev/null || continue
+      [[ "$val" =~ ^-?[0-9]+$ ]] || continue
+      base="${f##*/}"
+      base="${base%_input}"
+      label="$base"
+      [[ -r "$h/${base}_label" ]] && read -r label <"$h/${base}_label"
+      # Deux capteurs avec le meme nom : on ajoute leur numero
+      if [[ "$seen" == *"|$label|"* ]]; then label="$label $base"; fi
+      seen="$seen$label|"
+      printf 'pg_temp,host=%s,chip=%s,device=%s,sensor=%s celsius=%s %s\n' \
+        "$(esc "$NODE")" "$(esc "$chip")" "$(esc "$dev")" "$(esc "$label")" "$(milli "$val")" "$TS"
+    done
+    for f in "$h"/fan*_input; do
+      [[ -r "$f" ]] || continue
+      read -r val <"$f" 2>/dev/null || continue
+      [[ "$val" =~ ^[0-9]+$ ]] || continue
+      base="${f##*/}"
+      base="${base%_input}"
+      label="$base"
+      [[ -r "$h/${base}_label" ]] && read -r label <"$h/${base}_label"
+      if [[ "$seen" == *"|$label|"* ]]; then label="$label $base"; fi
+      seen="$seen$label|"
+      printf 'pg_fan,host=%s,chip=%s,device=%s,sensor=%s rpm=%si %s\n' \
+        "$(esc "$NODE")" "$(esc "$chip")" "$(esc "$dev")" "$(esc "$label")" "$val" "$TS"
+    done
+  done
+}
+
+# Pools ZFS
+collect_zfs() {
+  command -v zpool >/dev/null 2>&1 || return 0
+  local name size alloc free frag cap health healthy
+  while IFS=$'\t' read -r name size alloc free frag cap health; do
+    [[ -n "$name" ]] || continue
+    frag="${frag%\%}"
+    cap="${cap%\%}"
+    [[ "$frag" =~ ^[0-9]+$ ]] || frag=0
+    [[ "$cap" =~ ^[0-9]+$ ]] || cap=0
+    [[ "$size" =~ ^[0-9]+$ ]] || continue
+    healthy=0
+    [[ "$health" == "ONLINE" ]] && healthy=1
+    printf 'pg_zfs,host=%s,pool=%s size=%si,alloc=%si,free=%si,frag=%si,cap=%si,healthy=%si,health="%s" %s\n' \
+      "$(esc "$NODE")" "$(esc "$name")" "$size" "$alloc" "$free" "$frag" "$cap" "$healthy" "$health" "$TS"
+  done < <(zpool list -Hp -o name,size,alloc,free,frag,cap,health 2>/dev/null)
+}
+
+# SMART : lu par smartctl en JSON, sans reveiller les disques en veille
+read -r -d '' SMART_PL <<'PERL'
+use strict;
+use warnings;
+use JSON::PP;
+my $raw = do { local $/; <STDIN> };
+my $j = eval { decode_json($raw) } or exit 0;
+exit 0 unless ref($j->{smart_status}) eq 'HASH';
+my %f;
+$f{passed} = ($j->{smart_status}{passed} ? 1 : 0) . 'i';
+my $t = $j->{temperature}{current};
+$f{temperature} = 0 + $t if defined $t && $t =~ /^-?\d+(\.\d+)?$/;
+my $h = $j->{power_on_time}{hours};
+$f{power_on_hours} = int($h) . 'i' if defined $h;
+$f{power_cycles} = int($j->{power_cycle_count}) . 'i' if defined $j->{power_cycle_count};
+if (ref(my $n = $j->{nvme_smart_health_information_log}) eq 'HASH') {
+  $f{wear_used_pct} = 0 + $n->{percentage_used} if defined $n->{percentage_used};
+  $f{media_errors} = int($n->{media_errors}) . 'i' if defined $n->{media_errors};
+  $f{available_spare_pct} = 0 + $n->{available_spare} if defined $n->{available_spare};
+  $f{unsafe_shutdowns} = int($n->{unsafe_shutdowns}) . 'i' if defined $n->{unsafe_shutdowns};
+}
+my %ata = (5 => 'reallocated_sectors', 187 => 'reported_uncorrect', 197 => 'pending_sectors',
+           198 => 'offline_uncorrectable', 199 => 'crc_errors');
+my %wear;
+for my $a (@{ $j->{ata_smart_attributes}{table} // [] }) {
+  my $id = $a->{id} // next;
+  if (my $k = $ata{$id}) {
+    my $r = $a->{raw}{value};
+    $f{$k} = int($r) . 'i' if defined $r && $r =~ /^\d+$/;
+  }
+  $wear{$id} = $a->{value} if defined $a->{value};
+}
+if (!defined $f{wear_used_pct} && ($ENV{PG_KIND} // '') ne 'hdd') {
+  for my $id (177, 231, 233, 202, 169) {
+    if (defined $wear{$id}) { my $u = 100 - $wear{$id}; $u = 0 if $u < 0; $f{wear_used_pct} = $u; last; }
+  }
+}
+sub esc { my $s = shift // ''; $s =~ s/([\\ ,=])/\\$1/g; return $s eq '' ? 'unknown' : $s; }
+my $model = $j->{model_name} // $j->{model_family} // '';
+my $tags = 'host=' . esc($ENV{PG_NODE}) . ',disk=' . esc($ENV{PG_DISK}) . ',type=' . esc($ENV{PG_KIND});
+$tags .= ',model=' . esc($model) if $model ne '';
+print "pg_smart,$tags " . join(',', map { "$_=$f{$_}" } sort keys %f) . " $ENV{PG_TS}\n";
+PERL
+
+collect_smart() {
+  command -v smartctl >/dev/null 2>&1 || return 0
+  local name
+  for name in $(list_disks); do
+    smartctl -j -n standby -i -H -A "/dev/$name" 2>/dev/null |
+      PG_NODE="$NODE" PG_DISK="$name" PG_KIND="$(disk_kind "$name")" PG_TS="$TS" perl -e "$SMART_PL" 2>/dev/null
+  done
+}
+
+HDR=""
+cleanup() { [[ -n "$HDR" ]] && rm -f "$HDR"; }
+trap cleanup EXIT
+trap 'exit 0' INT TERM
+
+if ((!PRINT_ONLY)); then
+  RUN_DIR="${RUNTIME_DIRECTORY:-/run}"
+  HDR=$(mktemp "$RUN_DIR/proxmox-grafana-agent.XXXXXX")
+  chmod 600 "$HDR"
+  printf 'Authorization: Token %s\n' "$PG_TOKEN" >"$HDR"
+fi
+
+WRITE_URL="${PG_URL%/}/api/v2/write?org=${PG_ORG}&bucket=${PG_BUCKET}&precision=s"
+FAILING=0
+
+send() { # donnees sur l'entree standard
+  local code
+  code=$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' -X POST "$WRITE_URL" \
+    -H @"$HDR" -H 'Content-Type: text/plain; charset=utf-8' --data-binary @- 2>/dev/null) || code="000"
+  if [[ "$code" == "204" ]]; then
+    ((FAILING)) && echo "write OK again"
+    FAILING=0
+  else
+    ((FAILING)) || echo "write failed (HTTP $code) to ${PG_URL}" >&2
+    FAILING=1
+  fi
+}
+
+LAST_SMART=0
+((!PRINT_ONLY)) && echo "proxmox-grafana-agent $VERSION started on $NODE, every ${PG_INTERVAL}s"
+while :; do
+  TS=$(date +%s)
+  SMART=0
+  if ((TS - LAST_SMART >= PG_SMART_INTERVAL)); then
+    SMART=1
+    LAST_SMART=$TS
+  fi
+  payload=$(
+    collect_disks
+    collect_hwmon
+    collect_zfs
+    ((SMART)) && collect_smart
+    printf 'pg_agent,host=%s version="%s",interval=%si %s\n' "$(esc "$NODE")" "$VERSION" "$PG_INTERVAL" "$TS"
+  )
+  if ((PRINT_ONLY)); then
+    printf '%s\n' "$payload"
+  else
+    send <<<"$payload"
+  fi
+  ((ONCE)) && break
+  sleep "$PG_INTERVAL" &
+  wait $!
+done
