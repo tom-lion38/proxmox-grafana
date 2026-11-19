@@ -6,6 +6,26 @@ English version: [README.en.md](README.en.md)
 
 Le script crée un conteneur Debian dédié, y installe InfluxDB 2 et Grafana, demande à Proxmox d'y envoyer ses mesures et ajoute des tableaux de bord prêts à l'emploi. Il pose quelques questions simples pendant l'installation, avec une réponse par défaut à chaque fois : on peut tout valider avec Entrée.
 
+## Aperçu
+
+Captures faites avec des données de démonstration.
+
+Vue d'ensemble : nœuds, VM et conteneurs, charge, mémoire, stockages.
+
+![Vue d'ensemble](docs/vue-ensemble.png)
+
+Disques physiques, santé SMART, températures et ZFS (avec l'agent).
+
+![Disques, SMART, températures et ZFS](docs/noeud-disques.png)
+
+Détail d'une VM ou d'un conteneur.
+
+![Détail d'une VM](docs/vm.png)
+
+Historique marche / arrêt et disponibilité.
+
+![Disponibilité](docs/disponibilite.png)
+
 ## Ce qui est surveillé
 
 - les nœuds : processeur, charge, mémoire, swap, cache ZFS, disque système, réseau par interface, temps depuis le démarrage, en ligne ou non ;

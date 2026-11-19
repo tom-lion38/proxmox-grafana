@@ -6,6 +6,26 @@ Version française : [README.md](README.md)
 
 The script creates a dedicated Debian container, installs InfluxDB 2 and Grafana in it, tells Proxmox to send its metrics there and adds ready-to-use dashboards. It asks a few simple questions during the installation, each with a default answer: you can just press Enter all the way.
 
+## Screenshots
+
+Taken with demo data, French version of the dashboards (English dashboards are installed when you pick English).
+
+Overview: nodes, VMs and containers, load, memory, storages.
+
+![Overview](docs/vue-ensemble.png)
+
+Physical disks, SMART health, temperatures and ZFS (with the agent).
+
+![Disks, SMART, temperatures and ZFS](docs/noeud-disques.png)
+
+Details of a VM or container.
+
+![VM details](docs/vm.png)
+
+On / off history and availability.
+
+![Availability](docs/disponibilite.png)
+
 ## What is monitored
 
 - nodes: CPU, load, memory, swap, ZFS cache, system disk, network per interface, uptime, online or not;
